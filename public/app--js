@@ -1,0 +1,290 @@
+const socket = io({
+  reconnectionAttempts: 5,
+  timeout: 10000,
+});
+
+const alertsContainer = document.getElementById('alerts');
+const statusIndicator = document.getElementById('status');
+
+const loginForm = document.getElementById('loginForm');
+const registerForm = document.getElementById('registerForm');
+const logoutBtn = document.getElementById('logoutBtn');
+
+const authStatus = document.getElementById('authStatus');
+const loginError = document.getElementById('loginError');
+const registerError = document.getElementById('registerError');
+
+const configForm = document.getElementById('configForm');
+const configStatus = document.getElementById('configStatus');
+
+const loginRegisterContainer = document.getElementById('loginRegisterContainer');
+const monitorUI = document.getElementById('monitorUI');
+
+let audioCtx = null;
+
+// Utility to play sound
+async function playNotificationSound() {
+  try {
+    if (!audioCtx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContextClass();
+    }
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
+
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 800;
+    gainNode.gain.value = 0.1;
+
+    oscillator.start();
+
+    setTimeout(() => {
+      oscillator.stop();
+    }, 200);
+  } catch (error) {
+    console.log('Audio notification not supported or error:', error);
+  }
+}
+
+function showAlert(message) {
+  const alertElement = document.createElement('div');
+  alertElement.classList.add('alert');
+
+  const now = new Date();
+  const timeString = now.toLocaleTimeString();
+
+  alertElement.innerHTML = `
+    <div class="alert-time">${timeString}</div>
+    <div class="alert-content">${message}</div>
+  `;
+
+  alertsContainer.prepend(alertElement);
+
+  while (alertsContainer.children.length > 10) {
+    alertsContainer.removeChild(alertsContainer.lastChild);
+  }
+
+  playNotificationSound();
+}
+
+function setAuthUI(loggedIn, username) {
+  if (loggedIn) {
+    loginRegisterContainer.style.display = 'none';
+    monitorUI.style.display = 'block';
+    authStatus.textContent = `Logged in as ${username || 'user'}`;
+  } else {
+    loginRegisterContainer.style.display = 'block';
+    monitorUI.style.display = 'none';
+    authStatus.textContent = '';
+  }
+}
+
+async function fetchConfig() {
+  try {
+    const response = await fetch('/api/getConfig');
+    if (response.ok) {
+      const config = await response.json();
+      if (config.privateKey) document.getElementById('privateKey').value = config.privateKey;
+      if (config.walletAddress) document.getElementById('walletAddress').value = config.walletAddress;
+      if (config.webhookUrl) document.getElementById('webhookUrl').value = config.webhookUrl;
+
+      if (Array.isArray(config.tokens)) {
+        const select = document.getElementById('tokens');
+        for (const option of select.options) {
+          option.selected = config.tokens.includes(option.value);
+        }
+        updateTokenBadges(config.tokens);
+      }
+
+      if (typeof config.minSize === 'number') {
+        document.getElementById('minSize').value = config.minSize;
+        updateMinSizeHeader(config.minSize);
+      }
+    } else if (response.status === 401) {
+      setAuthUI(false);
+    }
+  } catch (err) {
+    console.log('No existing config or not logged in');
+  }
+}
+
+function updateTokenBadges(tokens) {
+  const badgesContainer = document.getElementById('tokenBadges');
+  badgesContainer.innerHTML = ''; // clear existing badges
+  if (Array.isArray(tokens) && tokens.length > 0) {
+    tokens.forEach(token => {
+      const badge = document.createElement('div');
+      badge.className = 'badge';
+      badge.textContent = token;
+      badgesContainer.appendChild(badge);
+    });
+  }
+}
+
+function updateMinSizeHeader(minSize) {
+  const minSizeHeader = document.getElementById('minSizeHeader');
+  minSizeHeader.textContent = `Minimum Size: ${minSize}`;
+}
+
+// LOGIN FORM SUBMISSION
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  loginError.textContent = '';
+
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    const result = await res.json();
+
+    if (res.ok) {
+      setAuthUI(true, username);
+      await fetchConfig();
+    } else {
+      loginError.textContent = result.error || 'Login failed';
+    }
+  } catch (error) {
+    loginError.textContent = 'Network error: ' + error.message;
+  }
+});
+
+// CONFIG FORM SUBMISSION (Remove duplicate, keep all fields)
+configForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  configStatus.textContent = '';
+
+  const privateKey = document.getElementById('privateKey').value.trim();
+  const walletAddress = document.getElementById('walletAddress').value.trim();
+  const webhookUrl = document.getElementById('webhookUrl').value.trim();
+
+  const tokensSelect = document.getElementById('tokens');
+  const tokens = Array.from(tokensSelect.selectedOptions).map(o => o.value);
+
+  const minSizeStr = document.getElementById('minSize').value.trim();
+  const minSize = Number(minSizeStr);
+
+  try {
+    const response = await fetch('/api/setConfig', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ privateKey, walletAddress, webhookUrl, tokens, minSize }),
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      configStatus.textContent = '✅ Settings saved successfully and monitoring started.';
+    } else {
+      if (response.status === 401) {
+        configStatus.textContent = '❌ Unauthorized. Please login again.';
+        setAuthUI(false);
+      } else {
+        configStatus.textContent = `❌ Error: ${result.error || 'Unknown error'}`;
+      }
+    }
+  } catch (err) {
+    configStatus.textContent = `❌ Network error: ${err.message}`;
+  }
+});
+
+// REGISTER FORM SUBMISSION
+registerForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  registerError.textContent = '';
+  const username = document.getElementById('registerUsername').value.trim();
+  const password = document.getElementById('registerPassword').value;
+
+  try {
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const result = await res.json();
+    if (res.ok) {
+      setAuthUI(true, username);
+      await fetchConfig();
+    } else {
+      registerError.textContent = result.error || 'Registration failed';
+    }
+  } catch (err) {
+    registerError.textContent = 'Network error: ' + err.message;
+  }
+});
+
+logoutBtn.addEventListener('click', async () => {
+  try {
+    const res = await fetch('/api/logout', { method: 'POST' });
+    if (res.ok) {
+      setAuthUI(false);
+      alertsContainer.innerHTML = '';
+      configStatus.textContent = '';
+      loginError.textContent = '';
+      registerError.textContent = '';
+      configForm.reset();
+      loginForm.reset();
+      registerForm.reset();
+    }
+  } catch (err) {
+    console.error('Logout error', err);
+  }
+});
+
+// Socket.io events
+
+socket.on('connect', () => {
+  statusIndicator.textContent = 'Connected';
+  statusIndicator.classList.remove('disconnected');
+  statusIndicator.classList.add('connected');
+});
+
+socket.on('disconnect', () => {
+  statusIndicator.textContent = 'Disconnected';
+  statusIndicator.classList.remove('connected');
+  statusIndicator.classList.add('disconnected');
+});
+
+socket.on('connect_error', (error) => {
+  console.error('Connection error:', error);
+  statusIndicator.textContent = 'Connection Error';
+  statusIndicator.classList.remove('connected');
+  statusIndicator.classList.add('disconnected');
+});
+
+socket.on('reconnect_attempt', (attemptNumber) => {
+  statusIndicator.textContent = `Reconnecting (${attemptNumber})...`;
+});
+
+socket.on('fill_alert', (message) => {
+  showAlert(message);
+});
+
+// Initial check if logged in by attempting to fetch config
+// If 401, user not logged in
+(async () => {
+  try {
+    const resp = await fetch('/api/getConfig');
+    if (resp.ok) {
+      setAuthUI(true);
+      await fetchConfig();
+    } else {
+      setAuthUI(false);
+    }
+  } catch (err) {
+    setAuthUI(false);
+  }
+})();

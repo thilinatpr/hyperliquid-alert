@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hyperliquid Monitor</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container" id="appContainer">
+    <h1>Hyperliquid Trading Monitor</h1>
+
+    <div id="loginRegisterContainer">
+      <div id="authStatus" style="margin-bottom: 1rem; color: #6fcfff;"></div>
+
+      <div id="authForms">
+        <div id="loginFormContainer">
+          <h2>Login</h2>
+          <form id="loginForm">
+            <label for="loginUsername">Username:</label><br />
+            <input id="loginUsername" name="username" required /><br /><br />
+            <label for="loginPassword">Password:</label><br />
+            <input type="password" id="loginPassword" name="password" required /><br /><br />
+            <button type="submit">Login</button>
+          </form>
+          <div id="loginError" class="error-msg"></div>
+        </div>
+
+        <hr style="margin: 1rem 0" />
+
+        <div id="registerFormContainer">
+          <h2>Register</h2>
+          <form id="registerForm">
+            <label for="registerUsername">Username:</label><br />
+            <input id="registerUsername" name="username" required /><br /><br />
+            <label for="registerPassword">Password:</label><br />
+            <input type="password" id="registerPassword" name="password" required /><br /><br />
+            <button type="submit">Register</button>
+          </form>
+          <div id="registerError" class="error-msg"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="monitorUI" style="display:none;">
+      <div class="status-container">
+        <div id="status" class="status disconnected">Disconnected</div>
+        <button id="logoutBtn" style="margin-left:1rem;">Logout</button>
+      </div>
+
+      <div class="settings">
+        <div class="tokens">
+          <h3>Monitored Tokens:</h3>
+          <div id="tokenBadges"></div>
+        </div>
+        <div class="threshold">
+          <h3 id="minSizeHeader">Minimum Size: </h3>
+        </div>
+      </div>
+
+      <div class="alerts-container">
+        <h2>Recent Alerts</h2>
+        <div id="alerts" class="alerts"></div>
+      </div>
+
+      <div class="user-credentials">
+        <h2>Configure Your Settings</h2>
+        <form id="configForm">
+          <label for="privateKey">Wallet Private Key:</label><br />
+          <input
+            type="password"
+            id="privateKey"
+            name="privateKey"
+            placeholder="0x..."
+            required
+            style="width: 100%;"
+          /><br /><br />
+
+          <label for="walletAddress">Wallet Address:</label><br />
+          <input
+            type="text"
+            id="walletAddress"
+            name="walletAddress"
+            placeholder="0x..."
+            required
+            style="width: 100%;"
+          /><br /><br />
+
+          <label for="tokens">Tokens to Monitor (hold Ctrl/Cmd to select multiple):</label><br />
+          <select id="tokens" name="tokens" multiple size="4" style="width: 100%;">
+            <option value="SOL">SOL</option>
+            <option value="BTC">BTC</option>
+            <option value="ETH">ETH</option>
+            <option value="USDT">USDT</option>
+          </select>
+          <br /><br />
+
+          <label for="minSize">Minimum Trigger Size:</label><br />
+          <input
+            type="number"
+            id="minSize"
+            name="minSize"
+            step="0.01"
+            min="0.01"
+            value="0.1"
+            required
+            style="width: 100%;"
+          />
+          <br /><br />
+
+
+          <label for="webhookUrl">Discord Webhook URL:</label><br />
+          <input
+            type="url"
+            id="webhookUrl"
+            name="webhookUrl"
+            placeholder="https://discord.com/api/webhooks/..."
+            required
+            style="width: 100%;"
+          /><br /><br />
+
+          <button type="submit">Save Settings</button>
+        </form>
+        <div id="configStatus" style="margin-top: 1em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
